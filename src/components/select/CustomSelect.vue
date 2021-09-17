@@ -7,22 +7,21 @@
       @keyup.enter="tabChangeMenuState"
       @keyup.down="changeSelectedItem($event)"
       @keyup.up="changeSelectedItem($event)"
-      @blur="tabChangeMenuState"
+      @blur="blurMenu"
+      @focus="menu.onFocus = true"
       ref="customSelect"
     >
       <div class="custom-select-label">{{ label }}</div>
       <div v-if="!disabled" class="custom-select-selected">
-        {{ selectedValue }}
+        {{ selectedValue ?? "Не выбрано" }}
       </div>
       <div class="custom-select-chevron">
         <i :class="`fal fa-chevron-${arrowIconState}`"></i>
       </div>
       <div
-        v-if="showMenu"
-        :class="[
-          'custom-select-menu',
-          { 'custom-select-menu-top': showMenuTop },
-        ]"
+        v-if="menu.show"
+        :class="['custom-select-menu', { 'custom-select-menu-top': menu.top }]"
+        :style="`max-height:${menu.maxHeight}px`"
       >
         <template v-if="options.flet">
           <div class="flet">
@@ -57,11 +56,6 @@
         </template>
       </div>
     </div>
-    <!-- <select :id="id">
-      <option v-for="el in nativeSelectOptions" :key="el" :value="el">
-        {{ el }}
-      </option>
-    </select> -->
   </div>
 </template>
 
@@ -77,8 +71,12 @@ export default {
     disabled: Boolean,
   },
   data: () => ({
-    showMenu: false,
-    showMenuTop: false,
+    menu: {
+      show: false,
+      top: false,
+      maxHeight: 550,
+      onFocus: false,
+    },
     selectedValue: null,
     arrowNumber: 0,
     currentHover: null,
@@ -103,7 +101,10 @@ export default {
       return [].concat(fletOptions, groupOptions);
     },
     arrowIconState() {
-      return this.showMenu ? "up" : "down";
+      return this.menu.show ? "up" : "down";
+    },
+    sameValues() {
+      return this.currentHover === this.selectedValue;
     },
   },
   methods: {
@@ -116,11 +117,25 @@ export default {
       } else if (event.key === "ArrowUp" && this.arrowNumber) {
         --this.arrowNumber;
       }
-      this.currentHover = this.nativeSelectOptions[this.arrowNumber - 1];
+      if (this.menu.onFocus && !this.menu.show) {
+        this.selectedValue = this.nativeSelectOptions[this.arrowNumber - 1];
+        this.currentHover = this.nativeSelectOptions[this.arrowNumber - 1];
+      } else {
+        this.currentHover = this.nativeSelectOptions[this.arrowNumber - 1];
+      }
     },
     changeMenuState() {
       if (!this.disabled) {
-        this.showMenu = !this.showMenu;
+        this.menu.show = !this.menu.show;
+        const customSelectOffset = this.$refs.customSelect.offsetTop;
+        const customSelectHeight = this.$refs.customSelect.clientHeight;
+        const fullSelectHeight = this.menu.maxHeight - customSelectHeight;
+
+        if (window.innerHeight - customSelectOffset < fullSelectHeight) {
+          this.menu.top = true;
+        } else {
+          this.menu.top = false;
+        }
       }
     },
     tabChangeMenuState() {
@@ -133,17 +148,13 @@ export default {
     pointHoverOnOption(value) {
       this.currentHover = value;
     },
+    blurMenu() {
+      this.menu.show = false;
+      this.menu.onFocus = false;
+    },
   },
   mounted() {
     this.selectedValue = this.nativeSelectOptions[0];
-
-    if (
-      window.innerHeight -
-        (this.$refs.customSelect.clientHeight + this.$el.offsetTop) >
-      500
-    ) {
-      this.showMenuTop = true;
-    }
   },
 };
 </script>
@@ -151,11 +162,10 @@ export default {
 <style scoped lang="scss">
 .custom-select {
   display: grid;
-  //margin-top: 500px;
   grid-template-columns: 1fr auto;
   grid-template-rows: auto auto;
   position: relative;
-  width: 500px;
+  min-width: 250px;
   padding: 5px 15px;
   text-align: left;
   border: 1px solid #ccc;
@@ -181,7 +191,6 @@ export default {
   }
   &-menu {
     position: absolute;
-    max-height: 400px;
     overflow: hidden;
     overflow-y: auto;
     top: calc(100% + 8px);
